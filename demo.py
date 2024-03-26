@@ -26,7 +26,7 @@ torch.cuda.empty_cache()
 np.random.seed(seed=0)
 random.seed(0)
 
-def open_image(img_path, img_size, device=torch.device('cuda')):
+def open_image(img_path, img_sfize, device=torch.device('cuda')):
     """ Open image at path, resize and pad """
 
     # Open and reshape

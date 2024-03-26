@@ -34,7 +34,7 @@ else:
     device_name = 'CPU'
     print("Device - CPU")
 
-from demo import forward_model, get_camera_parameters, overlay_human_meshes, load_model as _load_model
+from video import forward_model, get_camera_parameters, overlay_human_meshes, load_model as _load_model
 from utils import normalize_rgb, demo_color as color, create_scene
 import time
 
@@ -44,7 +44,7 @@ list_examples = os.listdir(example_data_dir)
 list_examples_basename = [x for x in list_examples if x.endswith(('.jpg', 'jpeg', 'png')) and not x.startswith('._')]
 list_examples = [[os.path.join(example_data_dir, x)] for x in list_examples_basename]
 _list_examples_basename = [Path(x).stem for x in list_examples_basename]
-tmp_data_dir = 'tmp_data'
+tmp_data_dir = 'video_out'
 model_name = 'none'
 
 def download_smplx():

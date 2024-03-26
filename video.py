@@ -9,6 +9,7 @@ import os
 os.environ["PYOPENGL_PLATFORM"] = "egl"
 os.environ['EGL_DEVICE_ID'] = '0'
 
+import subprocess
 import sys
 from argparse import ArgumentParser
 import random
@@ -19,6 +20,7 @@ import torch
 from tqdm import tqdm
 import time
 import cv2
+import ffmpeg
 
 from utils import normalize_rgb, render_meshes, get_focalLength_from_fieldOfView, demo_color as color, print_distance_on_image, render_side_views, create_scene, MEAN_PARAMS, CACHE_DIR_MULTIHMR, SMPLX_DIR
 from model import Model
@@ -35,11 +37,12 @@ def open_image(img_pil, img_size, device=torch.device('cuda')):
     """ Open image at path, resize and pad """
 
     # Open and reshape
-    #    img_pil = Image.open(img_path).convert('RGB')
+    # img_pil = Image.open(img_path).convert('RGB')
     img_pil = ImageOps.contain(img_pil, (img_size,img_size)) # keep the same aspect ratio
 
     # Keep a copy for visualisations.
     img_pil_bis = ImageOps.pad(img_pil.copy(), size=(img_size,img_size), color=(255, 255, 255))
+
     img_pil = ImageOps.pad(img_pil, size=(img_size,img_size)) # pad with zero on the smallest side
 
     # Go to numpy 
@@ -145,10 +148,23 @@ def overlay_human_meshes(humans, K, model, img_pil, unique_color=False):
 
     return pred_rend_array, _color
 
+def apply_ffmpeg_compression(input_video_path, output_video_path):
+    """Apply FFMPEG Resizing over input video and store it temporarily"""
+    filename = os.path.basename(input_video_path)
+    temp_folder = 'temp_compressed/'
+    (
+        ffmpeg
+        .input("lite/gBR_sBM_c01_d04_mBR0_ch02.mp4")
+        .hflip()
+        .output(output_video_path)
+        .run()
+    )
+
 if __name__ == "__main__":
         parser = ArgumentParser()
         parser.add_argument("--model_name", type=str, default='multiHMR_896_L')
         parser.add_argument("--video", type=str, default='')
+        parser.add_argument("--ffmpeg", type=int, default=0, choices=[0,1])
         parser.add_argument("--out_folder", type=str, default='demo_out')
         parser.add_argument("--start_frame", type=int, default=0)
         parser.add_argument("--end_frame", type=int, default=10000000)
@@ -199,7 +215,13 @@ if __name__ == "__main__":
         l_duration = []
 
         # Creating a VideoCapture object to read the video
-        cap = cv2.VideoCapture(args.video)
+        if(args.ffmpeg):
+            temp_filename = os.path.basename(args.video)
+            temp_filepath = os.path.join("temp_compressed", temp_filename)
+            apply_ffmpeg_compression(args.video, os.path.join(temp_filepath))
+            cap = cv2.VideoCapture(temp_filepath)
+        else:   
+            cap = cv2.VideoCapture(args.video)
 
 
         allFrames = []
@@ -218,6 +240,7 @@ if __name__ == "__main__":
 
                     # Get input in the right format for the model
                     img_size = model.img_size
+
 
                     converted = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
                     pil_im = Image.fromarray(converted)
@@ -329,3 +352,27 @@ if __name__ == "__main__":
                 pickle.dump(allFrames, handle, protocol=pickle.HIGHEST_PROTOCOL) 
 
         print('end')
+        # delete the contents of temp_compressed
+
+
+def extract_frames(input_video, output_dir, frame_rate=30):
+     os.makedirs(output_dir, exist_ok=True)
+     cmd = [
+        "ffmpeg",
+        "-i", input_video,
+        "-vf", f"fps={frame_rate}",
+        os.path.join(output_dir, "frame_%04d.jpg")
+     ]
+     subprocess.run(cmd)
+
+def reconstruct_video(input_dir, output_video, frame_rate = 30):
+     cmd = [
+          "ffmpeg",
+          "-framerate", str(frame_rate),
+          "-i", os.path.join(input_dir, "frame_%04d.jpg"),
+          "-c:v", "libx264",
+          "-pix_fmt", "yuv420p",
+          output_video
+     ]
+     subprocess.run(cmd)
+
